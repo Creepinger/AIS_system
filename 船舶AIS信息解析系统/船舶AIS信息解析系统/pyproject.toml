@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ais-decoder"
+version = "0.1.0"
+description = "船舶AIS信息解析系统 - PySide6 实现"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "AIS Decoding Group" }]
+license = { text = "MIT" }
+dependencies = [
+    "PySide6>=6.6",
+    "pyserial>=3.5",
+    "mysql-connector-python>=8.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+ais-decoder = "main:main"
+
+[tool.setuptools]
+packages = ["ais", "link", "storage", "ui"]
+py-modules = ["main", "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
