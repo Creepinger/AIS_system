@@ -69,7 +69,9 @@ def _safe_static(path: str) -> Path:
 @app.get("/static/{path:path}")
 async def static_handler(path: str):
     fp = _safe_static(path)
-    return FileResponse(str(fp))
+    return FileResponse(str(fp), headers={
+        "Cache-Control": "no-cache, must-revalidate",
+    })
 
 
 @app.get("/healthz")
