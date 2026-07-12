@@ -24,7 +24,7 @@ async def replay_file(path: str | Path,
                       line_delay_ms: int = 50,
                       stop_event: Optional[asyncio.Event] = None,
                       on_line: LineCallback = lambda s: None) -> None:
-    """异步逐行回放文本文件。
+    """异步逐行回放文本文件(流式读取,内存友好)。
 
     Args:
         path: 文本文件路径,每行一条 NMEA。
@@ -36,19 +36,19 @@ async def replay_file(path: str | Path,
     if not p.exists():
         log.error("文件不存在: %s", p)
         return
-    text = p.read_text(encoding="utf-8", errors="replace")
-    for raw in text.splitlines():
-        if stop_event is not None and stop_event.is_set():
-            break
-        line = raw.strip()
-        # 接受所有 AIS NMEA 0183 句子。
-        # 标准 talker 是 AI(船→站) / AB(基站聚合) / BS / AN / AP / AS 等,
-        # 只要消息体以 VDM(船→站) 或 VDO(船→船) 结尾即可。
-        if line and line.startswith("!") and (
-            "VDM," in line[:8] or "VDO," in line[:8]
-        ):
-            on_line(line)
-        await asyncio.sleep(line_delay_ms / 1000.0)
+    try:
+        with open(p, "r", encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                line = raw.strip()
+                if line and line.startswith("!") and (
+                    "VDM," in line[:8] or "VDO," in line[:8]
+                ):
+                    on_line(line)
+                await asyncio.sleep(line_delay_ms / 1000.0)
+    except Exception as e:
+        log.error("读取文件失败: %s", e)
 
 
 # ---------------- 串口 ----------------

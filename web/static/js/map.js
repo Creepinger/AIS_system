@@ -31,9 +31,6 @@
             maxZoom: 18,
         });
 
-        // 国内访问 OSM 极不稳定,改用高德矢量瓦片(无需 key,对 Leaflet 即用即得)。
-        // 注意:高德为 GCJ-02 坐标系,和 AIS 解出的 WGS-84 经纬度会有几百米偏差,
-        // 但保证地图能正常渲染。
         L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", {
             subdomains: ["1", "2", "3", "4"],
             maxZoom: 18,

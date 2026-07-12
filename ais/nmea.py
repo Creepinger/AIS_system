@@ -100,12 +100,11 @@ class FragmentBuffer:
 
     def feed(self, sent: NmeaSentence) -> Optional[str]:
         """送入一条已拆包的语句。返回完整 payload 字符串,或不完整时返回 None。"""
+        self._cleanup()
+
         if sent.total == 1:
-            # 单条即可返回
-            self._cleanup()
             return sent.payload
 
-        # 多条:按 index 1..total 缓存拼接
         idx = sent.index
         key = sent.key
         slot = self._buf.get(key)
@@ -117,7 +116,6 @@ class FragmentBuffer:
                 "ts": time.monotonic(),
             }
             self._buf[key] = slot
-        # 重复或越界直接忽略
         if idx in slot["received"] or idx < 1 or idx > slot["expected"]:
             return None
         slot["received"].add(idx)

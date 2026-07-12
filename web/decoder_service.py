@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -56,6 +57,8 @@ class AISService:
         self._pending_updated_mmsi: set[int] = set()
         # 锁:防止 on_line 与 broadcast_loop 并发修改 self.ships
         self._lock = asyncio.Lock()
+        # 线程锁:用于同步访问共享数据(兼容同步回调)
+        self._thread_lock = threading.Lock()
         # 当前数据源 task
         self._source_task: Optional[asyncio.Task] = None
         self._stop_event: Optional[asyncio.Event] = None
@@ -72,6 +75,10 @@ class AISService:
         # 对比结果缓存 (最近 N 条)
         self._comparison_results: list[dict] = []
         self._max_comparison_results: int = 100
+
+        # 船舶过期清理
+        self._max_ship_age_sec: int = 60
+        self._last_cleanup_time: float = time.time()
 
     # ---------- 生命周期 ----------
     async def start(self, kind: str = "file", **kwargs) -> None:
@@ -107,29 +114,32 @@ class AISService:
                 pass
         self._stop_event = asyncio.Event()
         if kind == "file":
-            path = kwargs.get("path") or str(
-                PROJECT_ROOT / "tests" / "samples" / "sample_nmea.txt"
-            )
+            path = kwargs.get("path") or CONFIG.file.path
             self.source_desc = f"文件: {path}"
             self._source_task = await start_source(
                 "file", on_line=self._on_line,
                 stop_event=self._stop_event, path=path,
                 line_delay_ms=kwargs.get("line_delay_ms", 50),
             )
+        elif kind == "serial":
+            port = kwargs.get("serial_port") or kwargs.get("path") or CONFIG.serial.port
+            baudrate = kwargs.get("baudrate", CONFIG.serial.baudrate)
+            self.source_desc = f"串口: {port} @ {baudrate}"
+            self._source_task = await start_source(
+                "serial", on_line=self._on_line,
+                stop_event=self._stop_event, serial_port=port, baudrate=baudrate,
+            )
         elif kind == "net":
-            # 支持两种传参方式:
-            #   { host, port }       — 直接传(优先)
-            #   { path: "IP:PORT" }  — 从文本框传 "IP:PORT" 格式
             raw = kwargs.get("host") or kwargs.get("path") or ""
             if ":" in raw:
                 host, _, port_str = raw.partition(":")
                 try:
                     port = int(port_str)
                 except ValueError:
-                    port = 5000
+                    port = CONFIG.network.port
             else:
-                host = raw or "127.0.0.1"
-                port = 5000
+                host = raw or CONFIG.network.host
+                port = CONFIG.network.port
             self.source_desc = f"网口: {host}:{port}"
             self._source_task = await start_source(
                 "net", on_line=self._on_line,
@@ -142,88 +152,123 @@ class AISService:
 
     # ---------- 数据接收回调 ----------
     def _on_line(self, line: str) -> None:
-        """从 link_async 在后台 task 中调用(非 async)。
-
-        因为 on_line 是普通函数,我们用 call_soon_threadsafe 把
-        处理任务排到事件循环,避免跨线程访问 self.ships。
-        """
+        """从 link_async 在后台 task 中调用(非 async)。"""
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
-            # 在 executor 线程里没有运行中的 loop,用 _call_soon_threadsafe 是没有 loop 的场景
-            # 实际调用方(replay_*)都在 asyncio 任务里,所以一定有 loop
+            log.warning("无法获取事件循环，数据可能丢失")
             return
         if loop.is_running():
             loop.call_soon_threadsafe(self._handle_line, line)
+        else:
+            log.warning("事件循环未运行，数据可能丢失")
 
     def _handle_line(self, line: str) -> None:
         """同步处理一行 NMEA(在事件循环线程里执行)。"""
-        if self.paused:
-            return
-        self.stats["rx"] += 1
-        if not bcc_check(line):
-            self.stats["bcc_fail"] += 1
-            return
-        self.stats["bcc_pass"] += 1
+        try:
+            if self.paused:
+                return
+            with self._thread_lock:
+                self.stats["rx"] += 1
+            if not bcc_check(line):
+                with self._thread_lock:
+                    self.stats["bcc_fail"] += 1
+                log.warning("BCC 校验失败，丢弃脏数据: %s", line[:60])
+                return
+            with self._thread_lock:
+                self.stats["bcc_pass"] += 1
 
-        if self._decoder_mode == "compare":
-            # 对比模式：同时使用两种解码器
-            self._handle_line_compare(line)
-        elif self._decoder_mode == "pyais":
-            # 仅使用 pyais
-            self._handle_line_pyais(line)
-        else:
-            # 默认：自研解析器
-            self._handle_line_custom(line)
+            if self._decoder_mode == "compare":
+                self._handle_line_compare(line)
+            elif self._decoder_mode == "pyais":
+                self._handle_line_pyais(line)
+            else:
+                self._handle_line_custom(line)
+        except Exception as e:
+            log.error("处理 NMEA 行时发生异常: %s, 行: %s", e, line[:60])
+
+    async def _async_handle_line(self, line: str) -> None:
+        """异步处理一行 NMEA(带锁保护)。"""
+        async with self._lock:
+            self._handle_line(line)
 
     def _handle_line_custom(self, line: str) -> None:
         """使用自研解析器处理一行 NMEA。"""
-        sent = parse_line(line)
-        if sent is None:
-            return
-        payload = self.frag.feed(sent)
-        if payload is None:
-            return
-        ship = AIS_Ship()
-        rc = decode_ais(payload, ship)
-        if rc != 0:
-            return
-        self._update_ship(ship)
+        try:
+            sent = parse_line(line)
+            if sent is None:
+                return
+            payload = self.frag.feed(sent)
+            if payload is None:
+                return
+            ship = AIS_Ship()
+            rc = decode_ais(payload, ship)
+            if rc != 0:
+                return
+            self._update_ship(ship)
+        except Exception as e:
+            log.error("自研解码器处理失败: %s", e)
 
     def _handle_line_pyais(self, line: str) -> None:
         """使用 pyais 库处理一行 NMEA。"""
-        from ais.pyais_decoder import PyAISDecoder
-        decoder = PyAISDecoder()
-        ship = AIS_Ship()
-        rc = decoder.decode_nmea(line, ship)
-        if rc != 0:
-            return
-        self._update_ship(ship)
+        try:
+            from ais.pyais_decoder import PyAISDecoder
+            decoder = PyAISDecoder()
+            ship = AIS_Ship()
+            rc = decoder.decode_nmea(line, ship)
+            if rc != 0:
+                return
+            self._update_ship(ship)
+        except Exception as e:
+            log.error("pyais 解码器处理失败: %s", e)
 
     def _handle_line_compare(self, line: str) -> None:
         """对比模式：同时使用两种解码器，记录对比结果。"""
-        result = self._unified_decoder.decode_and_compare(line)
+        try:
+            result = self._unified_decoder.decode_and_compare(line)
 
-        # 记录对比结果（只要有 pyais 结果就记录）
-        if result.pyais_dict and result.pyais_dict.get("mmsi"):
-            compare_dict = result.to_dict()
-            self._comparison_results.append(compare_dict)
-            if len(self._comparison_results) > self._max_comparison_results:
-                self._comparison_results.pop(0)
+            # 记录对比结果（只要有 pyais 结果就记录）
+            if result.pyais_dict and result.pyais_dict.get("mmsi"):
+                compare_dict = result.to_dict()
+                with self._thread_lock:
+                    self._comparison_results.append(compare_dict)
+                    if len(self._comparison_results) > self._max_comparison_results:
+                        self._comparison_results.pop(0)
 
-        # 使用自研结果更新船舶
-        if result.custom_ship:
-            self._update_ship(result.custom_ship)
+            # 使用自研结果更新船舶
+            if result.custom_ship:
+                self._update_ship(result.custom_ship)
+        except Exception as e:
+            log.error("对比模式处理失败: %s", e)
 
     def _update_ship(self, ship: AIS_Ship) -> None:
         """更新船舶数据。"""
-        self.stats["decoded"] += 1
-        self.stats["by_type"][ship.msg_type] = (
-            self.stats["by_type"].get(ship.msg_type, 0) + 1
-        )
-        record = ship.to_dict()
-        self.ships[ship.mmsi] = record
-        self._pending_updated_mmsi.add(ship.mmsi)
+        try:
+            record = ship.to_dict()
+            record["_ts"] = time.time()
+            with self._thread_lock:
+                self.stats["decoded"] += 1
+                self.stats["by_type"][ship.msg_type] = (
+                    self.stats["by_type"].get(ship.msg_type, 0) + 1
+                )
+                self.ships[ship.mmsi] = record
+        except Exception as e:
+            log.error("更新船舶数据失败: %s", e)
+
+    def _cleanup_expired_ships(self) -> None:
+        """清理过期船舶(超过 _max_ship_age_sec 未更新)。"""
+        now = time.time()
+        if now - self._last_cleanup_time < 10:
+            return
+        self._last_cleanup_time = now
+
+        expired_mmsis = []
+        with self._thread_lock:
+            for mmsi, record in self.ships.items():
+                if now - record.get("_ts", 0) > self._max_ship_age_sec:
+                    expired_mmsis.append(mmsi)
+            for mmsi in expired_mmsis:
+                del self.ships[mmsi]
 
     # ---------- 后台广播循环 ----------
     async def _broadcast_loop(self) -> None:
@@ -235,26 +280,30 @@ class AISService:
     async def _flush_once(self) -> None:
         """构造一帧并推给所有 WS 客户端。"""
         from web.ws import manager
-        # 拷贝当前快照与统计
-        if self.paused:
-            # 暂停时仍可广播状态/源变化,但不重复刷新船舶
-            ships_snapshot = []
-        else:
-            ships_snapshot = list(self.ships.values())
+        self._cleanup_expired_ships()
+        with self._thread_lock:
+            if self.paused:
+                ships_snapshot = []
+            else:
+                ships_snapshot = list(self.ships.values())
+            stats_view = self._stats_view()
+            source_desc = self.source_desc
+            paused = self.paused
+            decoder_mode = self._decoder_mode
+            comparison_results = self._comparison_results[-10:] if self._decoder_mode == "compare" and self._comparison_results else []
 
         payload = {
             "type": "batch",
             "ts": time.time(),
-            "source": self.source_desc,
-            "paused": self.paused,
-            "stats": self._stats_view(),
+            "source": source_desc,
+            "paused": paused,
+            "stats": stats_view,
             "ships": ships_snapshot,
-            "decoder_mode": self._decoder_mode,
+            "decoder_mode": decoder_mode,
         }
 
-        # 对比模式下附加对比结果
-        if self._decoder_mode == "compare" and self._comparison_results:
-            payload["comparison"] = self._comparison_results[-10:]  # 最近 10 条
+        if comparison_results:
+            payload["comparison"] = comparison_results
 
         await manager.broadcast(payload)
 

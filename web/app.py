@@ -21,7 +21,7 @@ from typing import Optional
 from fastapi import (
     FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException,
 )
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 
 from config import CONFIG, PROJECT_ROOT, DATA_DIR
 from web.decoder_service import service
@@ -40,9 +40,8 @@ STATIC_DIR = HERE / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 默认加载真实 AIS 数据,快速回放(大量数据时请自行调整)
-    sample_path = str(PROJECT_ROOT / "AIS one hour 202506.txt")
-    await service.start("file", path=sample_path, line_delay_ms=1)
+    sample_path = CONFIG.file.path
+    await service.start("file", path=sample_path, line_delay_ms=CONFIG.file.line_delay_ms)
     log.info("AISService started with %s", sample_path)
     yield
     await service.stop()
@@ -71,17 +70,11 @@ def _safe_static(path: str) -> Path:
 async def static_handler(path: str):
     fp = _safe_static(path)
     media_type = _guess_media_type(fp.name)
-    return StreamingResponse(
-        _stream_file(fp),
+    return FileResponse(
+        fp,
         media_type=media_type,
         headers={"Cache-Control": "public, max-age=3600"},
     )
-
-
-async def _stream_file(fp: Path, chunk_size: int = 64 * 1024):
-    with open(fp, "rb") as f:
-        while chunk := f.read(chunk_size):
-            yield chunk
 
 
 def _guess_media_type(name: str) -> str:
