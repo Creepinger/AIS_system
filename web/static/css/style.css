@@ -24,6 +24,12 @@ html, body {
     padding: 6px 14px; border-radius: 4px; cursor: pointer;
 }
 .controls button:hover { background: #1d4ed8; }
+.nav-link {
+    color: #38bdf8; text-decoration: none;
+    padding: 6px 12px; border: 1px solid #38bdf8;
+    border-radius: 4px; font-size: 13px;
+}
+.nav-link:hover { background: #38bdf8; color: #0a1018; }
 .ws-state { padding: 4px 10px; border-radius: 10px; font-size: 12px; }
 .ws-state.on { background: #14532d; color: #bbf7d0; }
 .ws-state.off { background: #7f1d1d; color: #fecaca; }
