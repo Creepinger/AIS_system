@@ -69,9 +69,31 @@ def _safe_static(path: str) -> Path:
 @app.get("/static/{path:path}")
 async def static_handler(path: str):
     fp = _safe_static(path)
-    return FileResponse(str(fp), headers={
-        "Cache-Control": "no-cache, must-revalidate",
-    })
+    media_type = _guess_media_type(fp.name)
+    return FileResponse(
+        fp,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+def _guess_media_type(name: str) -> str:
+    ext = name.rsplit(".", 1)[-1].lower()
+    return {
+        "html": "text/html; charset=utf-8",
+        "css": "text/css",
+        "js": "application/javascript",
+        "json": "application/json",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "gif": "image/gif",
+        "svg": "image/svg+xml",
+        "ico": "image/x-icon",
+        "woff2": "font/woff2",
+        "woff": "font/woff",
+        "ttf": "font/ttf",
+    }.get(ext, "application/octet-stream")
 
 
 @app.get("/healthz")
