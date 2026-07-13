@@ -11,7 +11,6 @@
     var initialCenter = [22.3, 114.2];
     var initialZoom = 4;
     var userHasInteracted = false;  // 用户手动操作后不再自动 fit
-    var selectedMmsi = null;        // 当前选中的船舶 mmsi
 
     function init() {
         var mapEl = document.getElementById("map");
@@ -49,63 +48,15 @@
         });
     }
 
-    // 按消息类型返回主题色
-    function _colorFor(msgType) {
-        if (msgType === 1) return "#ef4444";       // A 类 - 红
-        if (msgType === 5) return "#22c55e";       // 静态 - 绿
-        if (msgType === 18) return "#f59e0b";      // B 类 - 黄
-        return "#60a5fa";                          // 其他 - 蓝
-    }
-
-    // 升级版船形 SVG 图标: 带白色描边, 按 cog 旋转, 选中态高亮
-    function _icon(cog, color, selected) {
+    function _icon(cog, color) {
         var c = color || "#ef4444";
-        var sel = selected ? " selected" : "";
-        var rot = cog || 0;
-        // 船帆 (三角) + 船体 (梯形), 整体绕中心旋转
-        var svg =
-            '<svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg"' +
-            ' style="color:' + c + ';">' +
-              '<g transform="rotate(' + rot + ' 12 12)">' +
-                // 船帆/上层建筑: 三角形
-                '<path d="M12 3 L17 13 L7 13 Z"' +
-                ' fill="' + c + '" stroke="#ffffff" stroke-width="1.3"' +
-                ' stroke-linejoin="round"/>' +
-                // 船体: 梯形
-                '<path d="M5 13 L19 13 L17 19 L7 19 Z"' +
-                ' fill="' + c + '" stroke="#ffffff" stroke-width="1.3"' +
-                ' stroke-linejoin="round"/>' +
-                // 中线 (船头到船尾, 弱化)
-                '<line x1="12" y1="4" x2="12" y2="18"' +
-                ' stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.55"/>' +
-              '</g>' +
-            '</svg>';
         return L.divIcon({
-            className: "ship-icon" + sel,
-            html: svg,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
+            className: "ship-icon",
+            html: '<div style="transform: rotate(' + (cog || 0) + 'deg); '
+                + 'color:' + c + '">&#9650;</div>',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
         });
-    }
-
-    // 选中某船: 切换 selectedMmsi 并更新相关 marker 图标
-    function selectShip(mmsi) {
-        if (selectedMmsi === mmsi) return;
-        // 取消上一选中
-        if (selectedMmsi && markers[selectedMmsi] && allShips[selectedMmsi]) {
-            var prev = allShips[selectedMmsi];
-            markers[selectedMmsi].setIcon(
-                _icon(prev.cog, _colorFor(prev.msg_type), false)
-            );
-        }
-        selectedMmsi = mmsi;
-        // 应用新选中
-        if (mmsi && markers[mmsi] && allShips[mmsi]) {
-            var s = allShips[mmsi];
-            markers[mmsi].setIcon(
-                _icon(s.cog, _colorFor(s.msg_type), true)
-            );
-        }
     }
 
     function popupContent(s) {
@@ -150,18 +101,20 @@
             if (!(s.latitude >= -90 && s.latitude <= 90 &&
                   s.longitude >= -180 && s.longitude <= 180)) continue;
             if (s.latitude === 0 && s.longitude === 0) continue;
-
-            var color = _colorFor(s.msg_type);
-            var isSelected = (selectedMmsi === s.mmsi);
+            var color;
+            if (s.msg_type === 1) color = "#ef4444";       // A 类 - 红
+            else if (s.msg_type === 5) color = "#22c55e";  // 静态 - 绿
+            else if (s.msg_type === 18) color = "#f59e0b";// B 类 - 黄
+            else color = "#60a5fa";
 
             var prev = markers[s.mmsi];
             if (prev) {
                 prev.setLatLng([s.latitude, s.longitude]);
-                prev.setIcon(_icon(s.cog, color, isSelected));
+                prev.setIcon(_icon(s.cog, color));
                 prev.setPopupContent(popupContent(s));
             } else {
                 var m = L.marker([s.latitude, s.longitude], {
-                    icon: _icon(s.cog, color, isSelected),
+                    icon: _icon(s.cog, color),
                 }).addTo(map);
                 m.bindPopup(popupContent(s));
                 m.on("click", function (ev) {
@@ -169,10 +122,7 @@
                         return sh.latitude === ev.latlng.lat &&
                                sh.longitude === ev.latlng.lng;
                     });
-                    if (mm) {
-                        selectShip(mm.mmsi);
-                        global.WSClient.send({ cmd: "noop" });
-                    }
+                    if (mm) global.WSClient.send({ cmd: "noop" });
                 });
                 markers[s.mmsi] = m;
             }
@@ -188,17 +138,11 @@
         Object.values(markers).forEach(function (m) { map.removeLayer(m); });
         markers = {};
         allShips = {};
-        selectedMmsi = null;  // 清空选中态
         userHasInteracted = false;  // 清空后恢复自动 fit
         map.setView(initialCenter, initialZoom);  // 地图回到初始视野
     }
 
-    global.MapMod = {
-        init: init,
-        applyShips: applyShips,
-        clearAll: clearAll,
-        selectShip: selectShip
-    };
+    global.MapMod = { init: init, applyShips: applyShips, clearAll: clearAll };
 }(window));
 
 document.addEventListener("DOMContentLoaded", function () {
