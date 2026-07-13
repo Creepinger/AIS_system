@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIS 报文解析工具</title>
+    <link rel="stylesheet" href="/static/css/parse.css" />
+</head>
+<body>
+    <header class="topbar">
+        <div class="title">AIS 报文在线解析工具</div>
+        <div class="nav">
+            <a href="/" class="nav-link">返回主界面</a>
+        </div>
+    </header>
+
+    <main class="parse-layout">
+        <!-- 左侧：输入区 -->
+        <section class="input-panel">
+            <div class="panel-header">
+                <span class="panel-title">输入 AIS 报文</span>
+                <div class="panel-actions">
+                    <label class="mode-label">
+                        <span>解码器</span>
+                        <select id="decoder-select">
+                            <option value="custom">自研解析器</option>
+                            <option value="pyais">pyais 库</option>
+                            <option value="compare">对比模式</option>
+                        </select>
+                    </label>
+                    <button id="btn-example" class="btn btn-secondary">示例数据</button>
+                    <button id="btn-clear-input" class="btn btn-secondary">清空</button>
+                    <button id="btn-parse" class="btn btn-primary">解析</button>
+                </div>
+            </div>
+
+            <textarea id="nmea-input"
+                      placeholder="每行一条 NMEA 报文，例如:&#10;!AIVDM,1,1,,A,15MwkRUOidG?GLaKG>R;wT4F>4F2220,0*1F&#10;!AIVDM,1,1,,B,100u99kP0QHrqN6LqCMA:6F2220,0*3A&#10;支持多条同时解析（按行分隔）"></textarea>
+
+            <div class="input-status">
+                <span>共 <b id="line-count">0</b> 行非空内容</span>
+                <span id="parse-result-info"></span>
+            </div>
+        </section>
+
+        <!-- 右侧：结果展示区 -->
+        <section class="result-panel">
+            <div class="panel-header">
+                <span class="panel-title">解析结果</span>
+                <div class="panel-actions">
+                    <span class="legend">
+                        <span class="dot dot-custom"></span>自研
+                        <span class="dot dot-pyais"></span>pyais
+                        <span class="dot dot-ok"></span>误差合格
+                        <span class="dot dot-warn"></span>误差超标
+                    </span>
+                </div>
+            </div>
+
+            <div id="result-list" class="result-list">
+                <div class="empty-hint">请在左侧粘贴 AIS 报文后点击「解析」</div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/js/parse.js"></script>
+</body>
+</html>
