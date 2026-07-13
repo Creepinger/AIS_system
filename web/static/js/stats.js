@@ -255,19 +255,36 @@
         });
     }
 
+    // 按 msg_type 返回徽章颜色类 (msg1=红, msg5=绿, msg18=黄, 其他=蓝)
+    function _badgeClass(msgType) {
+        if (msgType === 1) return "msg1";
+        if (msgType === 5) return "msg5";
+        if (msgType === 18) return "msg18";
+        return "msgoth";
+    }
+
     function addRow(s) {
         if (!body) return;
         var row = document.createElement("div");
         row.className = "ship-row";
         row.dataset.mmsi = s.mmsi;
+        // MMSI 单元格内增加 msg_type 颜色徽章 (仅渲染增强, 数据逻辑不变)
+        var badgeCls = _badgeClass(s.msg_type);
         row.innerHTML =
-            "<span>" + s.mmsi + "</span>" +
+            "<span class='mmsi-cell'>" +
+                "<span class='type-badge " + badgeCls + "'>" + s.msg_type + "</span>" +
+                s.mmsi +
+            "</span>" +
             "<span>" + s.latitude.toFixed(4) + "</span>" +
             "<span>" + s.longitude.toFixed(4) + "</span>" +
             "<span>" + s.sog.toFixed(1) + "</span>" +
             "<span>" + s.cog + "</span>" +
             "<span>" + (s.shipname || "-") + "</span>";
         row.onclick = function () {
+            // 行高亮: 移除其他行的 active, 标记当前行 (仅渲染增强)
+            var prevActive = body.querySelector(".ship-row.active");
+            if (prevActive) prevActive.classList.remove("active");
+            row.classList.add("active");
             if (global.MapMod && global.MapMod.applyShips) {
                 global.MapMod.applyShips([s]);
             }
