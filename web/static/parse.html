@@ -3,66 +3,149 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AIS 报文解析工具</title>
-    <link rel="stylesheet" href="/static/css/parse.css" />
+    <title>船舶信息解析 - 船舶AIS信息解析系统</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260712" />
+    <link rel="stylesheet" href="/static/css/parse.css?v=20260715" />
 </head>
 <body>
     <header class="topbar">
-        <div class="title">AIS 报文在线解析工具</div>
-        <div class="nav">
+        <div class="title-group">
+            <span class="title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                     fill="none" stroke="currentColor" stroke-width="1.6"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <polygon points="12,4 14,12 12,11 10,12"
+                             fill="#f97316" stroke="#f97316" />
+                    <polygon points="12,20 10,12 12,13 14,12"
+                             fill="#2dd4bf" stroke="#2dd4bf" />
+                    <circle cx="12" cy="12" r="1.2" fill="#e3e9f0" stroke="none" />
+                </svg>
+            </span>
+            <div class="title">船舶AIS信息解析系统 · 船舶信息解析</div>
+        </div>
+        <div class="controls">
             <a href="/" class="nav-link">返回主界面</a>
+            <button id="btn-history" class="nav-btn">历史数据</button>
         </div>
     </header>
 
     <main class="parse-layout">
         <!-- 左侧：输入区 -->
-        <section class="input-panel">
-            <div class="panel-header">
-                <span class="panel-title">输入 AIS 报文</span>
-                <div class="panel-actions">
-                    <label class="mode-label">
+        <section class="parse-panel">
+            <div class="parse-panel-header">
+                <span class="parse-panel-title">AIS 报文内容</span>
+                <div class="parse-panel-actions">
+                    <label class="parse-mode-label">
                         <span>解码器</span>
                         <select id="decoder-select">
                             <option value="custom">自研解析器</option>
                             <option value="pyais">pyais 库</option>
-                            <option value="compare">对比模式</option>
                         </select>
                     </label>
-                    <button id="btn-example" class="btn btn-secondary">示例数据</button>
-                    <button id="btn-clear-input" class="btn btn-secondary">清空</button>
-                    <button id="btn-parse" class="btn btn-primary">解析</button>
+                    <button id="btn-example" class="parse-btn parse-btn-secondary">示例</button>
+                    <button id="btn-clear-input" class="parse-btn parse-btn-secondary">清空</button>
+                    <button id="btn-parse" class="parse-btn parse-btn-primary">解析</button>
                 </div>
             </div>
 
             <textarea id="nmea-input"
-                      placeholder="每行一条 NMEA 报文，例如:&#10;!AIVDM,1,1,,A,15MwkRUOidG?GLaKG>R;wT4F>4F2220,0*1F&#10;!AIVDM,1,1,,B,100u99kP0QHrqN6LqCMA:6F2220,0*3A&#10;支持多条同时解析（按行分隔）"></textarea>
+                      spellcheck="false"
+                      placeholder="请输入AIS报文，每行一条&#10;例如:&#10;!AIVDM,1,1,,A,15MwkRUOidG?GLaKG>R;wT4F>4F2220,0*1F&#10;!AIVDM,1,1,,B,100u99kP0QHrqN6LqCMA:6F2220,0*3A&#10;支持多条同时解析（按行分隔）"></textarea>
 
-            <div class="input-status">
+            <div class="parse-input-status">
                 <span>共 <b id="line-count">0</b> 行非空内容</span>
-                <span id="parse-result-info"></span>
+                <span id="parse-result-info">就绪</span>
             </div>
         </section>
 
         <!-- 右侧：结果展示区 -->
-        <section class="result-panel">
-            <div class="panel-header">
-                <span class="panel-title">解析结果</span>
-                <div class="panel-actions">
-                    <span class="legend">
-                        <span class="dot dot-custom"></span>自研
-                        <span class="dot dot-pyais"></span>pyais
-                        <span class="dot dot-ok"></span>误差合格
-                        <span class="dot dot-warn"></span>误差超标
-                    </span>
+        <section class="parse-panel">
+            <div class="parse-panel-header">
+                <span class="parse-panel-title">解析结果</span>
+                <div class="parse-legend">
+                    <span><i class="dot dot-custom"></i>自研</span>
+                    <span><i class="dot dot-pyais"></i>pyais</span>
+                    <span><i class="dot dot-ok"></i>误差合格</span>
+                    <span><i class="dot dot-warn"></i>误差超标</span>
                 </div>
             </div>
-
-            <div id="result-list" class="result-list">
-                <div class="empty-hint">请在左侧粘贴 AIS 报文后点击「解析」</div>
+            <div id="result-list" class="parse-result-list">
+                <div class="parse-empty-hint">解析结果将在这里显示</div>
             </div>
         </section>
     </main>
 
-    <script src="/static/js/parse.js"></script>
+    <script src="/static/js/parse.js?v=20260715"></script>
+    <script src="/static/js/history.js?v=20260715"></script>
+
+    <!-- Toast 提示 -->
+    <div id="history-toast" class="history-toast"></div>
+
+    <!-- 历史数据查询模态框 -->
+    <div id="history-modal-backdrop" class="modal-backdrop" hidden>
+        <div class="modal" role="dialog" aria-labelledby="history-modal-title">
+            <div class="modal-header">
+                <span id="history-modal-title" class="modal-title">历史数据查询</span>
+                <div class="modal-header-right">
+                    <button id="history-modal-close" class="modal-close" aria-label="关闭">×</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="history-toolbar">
+                    <label>
+                        MMSI
+                        <input id="history-mmsi" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        纬度
+                        <input id="history-lat" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        经度
+                        <input id="history-lon" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        航速(kn)
+                        <input id="history-sog" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        航向(°)
+                        <input id="history-cog" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        船名
+                        <input id="history-shipname" type="text" placeholder="模糊匹配" />
+                    </label>
+                    <label>
+                        最多
+                        <input id="history-limit" type="number" value="500" min="1" max="5000" />
+                        条
+                    </label>
+                    <button id="btn-history-query" class="modal-btn modal-btn-primary">查询</button>
+                    <button id="btn-history-new" class="modal-btn modal-btn-new">+ 新增</button>
+                    <button id="btn-history-del-all" class="modal-btn modal-btn-danger">清空</button>
+                </div>
+                <div id="history-info" class="history-info">共 <b id="history-count-num">0</b> 条记录</div>
+                <div id="history-table-wrapper" class="history-table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>MMSI</th>
+                                <th>纬度</th>
+                                <th>经度</th>
+                                <th>航速(kn)</th>
+                                <th>航向(°)</th>
+                                <th>船名</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

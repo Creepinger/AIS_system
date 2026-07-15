@@ -1,0 +1,90 @@
+%% AIS消息解析流程图
+%% ========================================================
+%% 使用方法：
+%% 1. draw.io: 菜单栏选择 "编排" -> "插入" -> "高级" -> "Mermaid"
+%% 2. Typora/Mark Text: 直接粘贴代码，预览即可
+%% 3. VS Code: 安装 "Mermaid Preview" 或 "Markdown Preview Mermaid" 插件
+%% 4. 在线编辑: https://mermaid.live
+%% ========================================================
+
+flowchart TD
+    %% ==================== 节点定义 ====================
+
+    %% 开始节点
+    START(["<b>开始</b>"])
+
+    %% 系统初始化
+    INIT["<b>系统初始化</b><br/><font size='12'>(配置参数、初始化解码器)</font>"]
+
+    %% 采集数据
+    COLLECT["<b>采集AIS数据帧</b><br/><font size='12'>(从网口/文件/串口接收)</font>"]
+
+    %% 判断采集
+    CHECK_COLLECT{"<b>是否采集完<br/>1帧？</b>"}
+
+    %% BCC校验
+    BCC["<b>调用BCC校验程序</b><br/><font size='12'>(位异或校验)</font>"]
+
+    %% 判断BCC
+    CHECK_BCC{"<b>BCC校验<br/>是否通过？</b>"}
+
+    %% 错误处理
+    DISCARD["<b>丢弃或报错</b><br/><font size='12'>(记录错误信息)</font>"]
+
+    %% ASCII转6bit
+    ASCII_6BIT["<b>8位ASCII码转换为<br/>6位二进制码</b>"]
+
+    %% 识别消息ID
+    IDENTIFY_ID["<b>识别消息ID</b><br/><font size='12'>(判断消息类型1-27)</font>"]
+
+    %% 分配bit
+    SPLIT_BITS["<b>分配bit</b><br/><font size='12'>(按字段定义切分位流)</font>"]
+
+    %% 二进制转十进制
+    BIN_TO_DEC["<b>二进制码转换为十进制</b>"]
+
+    %% 十进制转字符
+    DEC_TO_CHAR["<b>十进制转字符</b><br/><font size='12'>(船名等文本字段)</font>"]
+
+    %% 信息显示
+    DISPLAY["<b>信息显示</b><br/><font size='12'>(输出解析结果)</font>"]
+
+    %% 结束节点
+    END(["<b>结束</b>"])
+
+    %% ==================== 流程连接 ====================
+
+    START --> INIT
+    INIT --> COLLECT
+    COLLECT --> CHECK_COLLECT
+
+    CHECK_COLLECT -->|"<b>否</b>"| COLLECT
+    CHECK_COLLECT -->|"<b>是</b>"| BCC
+
+    BCC --> CHECK_BCC
+    CHECK_BCC -->|"<b>否</b>"| DISCARD
+    DISCARD --> COLLECT
+
+    CHECK_BCC -->|"<b>是</b>"| ASCII_6BIT
+    ASCII_6BIT --> IDENTIFY_ID
+    IDENTIFY_ID --> SPLIT_BITS
+    SPLIT_BITS --> BIN_TO_DEC
+    BIN_TO_DEC --> DEC_TO_CHAR
+    DEC_TO_CHAR --> DISPLAY
+    DISPLAY --> END
+
+    %% 循环回下一帧
+    DISPLAY -.->|"<b>循环采集<br/>下一帧</b>"| COLLECT
+
+    %% ==================== 样式定义 ====================
+    %% 节点样式
+    classDef primary fill:#1565C0,stroke:#0D47A1,stroke-width:4,color:#FFFFFF,font-weight:bold
+    classDef secondary fill:#E3F2FD,stroke:#1565C0,stroke-width:3,color:#0D47A1,font-weight:bold
+    classDef decision fill:#FFF8E1,stroke:#FF8F00,stroke-width:3,color:#E65100,font-weight:bold
+    classDef warning fill:#FFEBEE,stroke:#D32F2F,stroke-width:3,color:#B71C1C,font-weight:bold
+
+    %% 应用样式
+    class START,END primary
+    class INIT,COLLECT,ASCII_6BIT,IDENTIFY_ID,SPLIT_BITS,BIN_TO_DEC,DEC_TO_CHAR,DISPLAY secondary
+    class CHECK_COLLECT,CHECK_BCC decision
+    class DISCARD warning

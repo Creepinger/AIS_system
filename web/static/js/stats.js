@@ -15,6 +15,11 @@
     var comparisonCache = [];
     var maxComparisonItems = 50;
 
+    // 网口配置对话框的相关 DOM
+    var netModalBackdrop, netHostInput, netPortInput;
+
+    var NET_STORAGE_KEY = "ais_net_config";
+
     function init() {
         statRx = document.getElementById("stat-rx");
         statBcc = document.getElementById("stat-bcc");
@@ -27,6 +32,11 @@
         comparePanel = document.getElementById("compare-panel");
         compareList = document.getElementById("compare-list");
 
+        // 网口对话框 DOM
+        netModalBackdrop = document.getElementById("net-modal-backdrop");
+        netHostInput = document.getElementById("net-host");
+        netPortInput = document.getElementById("net-port");
+
         document.getElementById("btn-apply").onclick = applySource;
         document.getElementById("btn-pause").onclick = function () {
             WSClient.send({ cmd: "pause" });
@@ -35,14 +45,23 @@
             WSClient.send({ cmd: "resume" });
         };
         document.getElementById("btn-clear").onclick = function () {
-            WSClient.send({ cmd: "clear" });
+            // 先清本地视图与缓存
             shipRows = {};
             body.innerHTML = "";
-            // 清空对比缓存
             comparisonCache = [];
             if (compareList) compareList.innerHTML = "";
             if (global.MapMod && global.MapMod.clearAll) {
                 global.MapMod.clearAll();
+            }
+            // 再通知后端清空 + 暂停接收,避免新数据立刻又把视图填回去
+            WSClient.send({ cmd: "clear" });
+            WSClient.send({ cmd: "pause" });
+            // 本地立刻同步按钮状态,不等下一帧广播
+            var btnPause = document.getElementById("btn-pause");
+            var btnResume = document.getElementById("btn-resume");
+            if (btnPause && btnResume) {
+                btnPause.disabled = true;
+                btnResume.disabled = false;
             }
         };
         document.getElementById("btn-upload").onclick = function () {
@@ -62,6 +81,57 @@
                 })
                 .catch(function (err) { alert("上传失败: " + err); });
         };
+
+        // 数据源类型切换:网口模式直接弹出配置对话框,
+        // 同时切换"上传文件"组的可见性 (仅文件回放可用)。
+        var sourceKindSelect = document.getElementById("source-kind");
+        if (sourceKindSelect) {
+            var fileOnlyControls = document.getElementById("file-only-controls");
+            var syncFileControls = function () {
+                if (!fileOnlyControls) return;
+                // 仅"文件回放"显示上传文件按钮
+                fileOnlyControls.hidden = sourceKindSelect.value !== "file";
+            };
+            // 初始同步 + 切换时同步
+            syncFileControls();
+            sourceKindSelect.onchange = function () {
+                syncFileControls();
+                if (sourceKindSelect.value === "net") {
+                    openNetModal();
+                }
+            };
+        }
+
+        // 网口对话框交互
+        if (netModalBackdrop) {
+            var closeBtn = document.getElementById("net-modal-close");
+            var cancelBtn = document.getElementById("net-modal-cancel");
+            var saveBtn = document.getElementById("net-modal-save");
+            // true = 显式取消(X/取消按钮/点背景/ESC)→ 切回"文件回放"
+            if (closeBtn) closeBtn.onclick = function () { closeNetModal(true); };
+            if (cancelBtn) cancelBtn.onclick = function () { closeNetModal(true); };
+            if (saveBtn) saveBtn.onclick = onSaveNetConfig;
+
+            // 点背景关闭
+            netModalBackdrop.addEventListener("click", function (e) {
+                if (e.target === netModalBackdrop) closeNetModal(true);
+            });
+
+            // ESC 关闭
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape" && !netModalBackdrop.hidden) {
+                    closeNetModal(true);
+                }
+            });
+
+            // Enter 提交
+            netPortInput && netPortInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); onSaveNetConfig(); }
+            });
+            netHostInput && netHostInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); onSaveNetConfig(); }
+            });
+        }
 
         // 解码器切换
         if (decoderSelect) {
@@ -84,11 +154,127 @@
         }
     }
 
+    // ---------- 网口配置对话框 ----------
+    function openNetModal() {
+        if (!netModalBackdrop) return;
+        // 回填上次配置 (优先),否则用 HTML 默认值
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem(NET_STORAGE_KEY) || "null"); } catch (e) {}
+        if (saved && saved.host && saved.port) {
+            netHostInput.value = saved.host;
+            netPortInput.value = saved.port;
+        }
+        netModalBackdrop.hidden = false;
+        // 延迟聚焦,使动画完整
+        setTimeout(function () {
+            if (netHostInput) {
+                netHostInput.focus();
+                netHostInput.select();
+            }
+        }, 60);
+    }
+
+    function closeNetModal(switchBackToFile) {
+        if (!netModalBackdrop) return;
+        netModalBackdrop.hidden = true;
+        // 只有在用户显式取消时才把下拉框切回"文件回放"；
+        // 保存成功后已通过 set_source 切到网口,这里必须保留选择不变。
+        if (switchBackToFile) {
+            var select = document.getElementById("source-kind");
+            if (select && select.value === "net") {
+                select.value = "file";
+            }
+        }
+    }
+
+    function onSaveNetConfig() {
+        var host = (netHostInput.value || "").trim();
+        var portStr = String(netPortInput.value || "").trim();
+        if (!host) { netHostInput.focus(); return; }
+        if (!portStr) { netPortInput.focus(); return; }
+        var port = parseInt(portStr, 10);
+        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+            netPortInput.focus();
+            netPortInput.select();
+            return;
+        }
+
+        // 持久化最近配置
+        try {
+            localStorage.setItem(NET_STORAGE_KEY,
+                JSON.stringify({ host: host, port: port }));
+        } catch (e) { /* 忽略 */ }
+
+        // 通过 WebSocket 切换数据源 (host / port 作为独立字段)
+        WSClient.send({
+            cmd: "set_source",
+            kind: "net",
+            host: host,
+            port: port
+        });
+        // 应用新源后立刻恢复接收,无需再手动点"继续"
+        WSClient.send({ cmd: "resume" });
+
+        // 显示当前模式
+        var srcEl = document.getElementById("source-path");
+        if (srcEl) srcEl.value = host + ":" + port;
+
+        closeNetModal();
+    }
+
     function applySource() {
         var kind = document.getElementById("source-kind").value;
+        if (kind === "net") {
+            // 网口模式: 优先解析 #source-path 中已输入的 host:port,
+            // 解析成功则直接发送 set_source; 解析失败/为空才打开对话框。
+            // 避免用户填了 ip:port 后被强制弹出对话框而被忽略。
+            var pathInput = document.getElementById("source-path");
+            var raw = pathInput ? (pathInput.value || "").trim() : "";
+            if (raw) {
+                var parsed = parseHostPort(raw);
+                if (parsed) {
+                    if (netHostInput) netHostInput.value = parsed.host;
+                    if (netPortInput) netPortInput.value = parsed.port;
+                    if (pathInput) pathInput.value = parsed.host + ":" + parsed.port;
+                    try {
+                        localStorage.setItem(NET_STORAGE_KEY,
+                            JSON.stringify({ host: parsed.host, port: parsed.port }));
+                    } catch (e) { /* 忽略 */ }
+                    WSClient.send({
+                        cmd: "set_source",
+                        kind: "net",
+                        host: parsed.host,
+                        port: parsed.port
+                    });
+                    // 应用新源后立刻恢复接收,无需再手动点"继续"
+                    WSClient.send({ cmd: "resume" });
+                    return;
+                }
+            }
+            // 解析失败/输入框为空 → 打开对话框让用户填
+            openNetModal();
+            return;
+        }
         var path = document.getElementById("source-path").value.trim();
-        if (!path) { alert("请输入路径 / 端口 / host:port"); return; }
+        if (!path) { alert("请输入文件路径"); return; }
         WSClient.send({ cmd: "set_source", kind: kind, path: path });
+        // 应用新源后立刻恢复接收,无需再手动点"继续"
+        WSClient.send({ cmd: "resume" });
+    }
+
+    // 解析 host:port / host:port / 纯 host (默认 5000)。
+    // 返回 null 表示解析失败。
+    function parseHostPort(raw) {
+        if (!raw) return null;
+        // 允许的格式: "1.2.3.4:5000" / "1.2.3.4,5000" / "1.2.3.4 5000" / "1.2.3.4"
+        var parts = raw.split(/[:,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+        if (parts.length === 0) return null;
+        var host = parts[0];
+        var port = parts.length >= 2 ? parseInt(parts[1], 10) : 5000;
+        // 简单校验
+        if (!host || host.length > 255) return null;
+        if (!Number.isFinite(port) || port < 1 || port > 65535) return null;
+        return { host: host, port: port };
     }
 
     function update(msg) {
@@ -104,6 +290,15 @@
                 ? "-" : Object.keys(t).map(function (k) { return k + ":" + t[k]; }).join(" ");
         }
         if (statSource) statSource.textContent = msg.source || "-";
+
+        // 同步暂停/继续按钮的可用性:广播帧中的 paused 字段
+        // 反映当前后端是否暂停接收数据。
+        var btnPause = document.getElementById("btn-pause");
+        var btnResume = document.getElementById("btn-resume");
+        if (btnPause && btnResume) {
+            btnPause.disabled = !!msg.paused;
+            btnResume.disabled = !msg.paused;
+        }
 
         // 更新解码器模式
         if (msg.decoder_mode) {
@@ -302,7 +497,8 @@
         clearComparison: function() {
             comparisonCache = [];
             if (compareList) compareList.innerHTML = "";
-        }
+        },
+        openNetModal: openNetModal
     };
 }(window));
 

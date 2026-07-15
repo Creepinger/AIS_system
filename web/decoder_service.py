@@ -34,6 +34,7 @@ from ais.unified_decoder import UnifiedDecoder, DecoderType
 
 from config import CONFIG, PROJECT_ROOT
 from web.link_async import start_source
+from storage.fastapi_store import FastSqliteStore
 
 log = logging.getLogger(__name__)
 
@@ -79,9 +80,13 @@ class AISService:
         # 船舶过期清理
         self._max_ship_age_sec: int = 60
         self._last_cleanup_time: float = time.time()
+        # 数据库持久化
+        self._store: Optional[FastSqliteStore] = None
 
     # ---------- 生命周期 ----------
     async def start(self, kind: str = "file", **kwargs) -> None:
+        if CONFIG.db.enabled:
+            self._store = FastSqliteStore(CONFIG.db.sqlite_path)
         if self._broadcaster is None:
             self._broadcaster = asyncio.create_task(self._broadcast_loop())
         await self._switch_source(kind, **kwargs)
@@ -102,6 +107,9 @@ class AISService:
             except (asyncio.CancelledError, Exception):
                 pass
             self._broadcaster = None
+        if self._store is not None:
+            self._store.close()
+            self._store = None
 
     async def _switch_source(self, kind: str, **kwargs) -> None:
         # 先停旧源
@@ -130,16 +138,28 @@ class AISService:
                 stop_event=self._stop_event, serial_port=port, baudrate=baudrate,
             )
         elif kind == "net":
-            raw = kwargs.get("host") or kwargs.get("path") or ""
-            if ":" in raw:
-                host, _, port_str = raw.partition(":")
+            # 优先使用前端独立发送的 host/port 字段;
+            # 兼容旧的 "host:port" 单字符串形式。
+            host = kwargs.get("host")
+            port = kwargs.get("port")
+            if not host and kwargs.get("path"):
+                raw = kwargs["path"]
+                if ":" in raw:
+                    host, _, port_str = raw.partition(":")
+                    if port is None:
+                        try:
+                            port = int(port_str)
+                        except (ValueError, TypeError):
+                            port = None
+                else:
+                    host = raw
+            if not host:
+                host = CONFIG.network.host
+            if port is None:
                 try:
-                    port = int(port_str)
-                except ValueError:
+                    port = int(port)
+                except (TypeError, ValueError):
                     port = CONFIG.network.port
-            else:
-                host = raw or CONFIG.network.host
-                port = CONFIG.network.port
             self.source_desc = f"网口: {host}:{port}"
             self._source_task = await start_source(
                 "net", on_line=self._on_line,
@@ -252,6 +272,8 @@ class AISService:
                     self.stats["by_type"].get(ship.msg_type, 0) + 1
                 )
                 self.ships[ship.mmsi] = record
+            if self._store is not None:
+                self._store.insert(ship)
         except Exception as e:
             log.error("更新船舶数据失败: %s", e)
 
@@ -323,9 +345,19 @@ class AISService:
         elif cmd == "resume":
             self.paused = False
         elif cmd == "clear":
+            # 清空所有船舶 / 片段 / 对比结果, 同时重置统计数据
+            # (收包 / BCC / 解码 / 类型计数), 并自动暂停接收新数据
+            # (符合 UI 上"清空"= 重置视图并冻结)。
             self.ships.clear()
             self.frag = FragmentBuffer()
             self._comparison_results.clear()
+            with self._thread_lock:
+                self.stats["rx"] = 0
+                self.stats["bcc_pass"] = 0
+                self.stats["bcc_fail"] = 0
+                self.stats["decoded"] = 0
+                self.stats["by_type"] = {}
+            self.paused = True
         elif cmd == "set_source":
             kind = msg.get("kind", "file")
             kwargs = {k: v for k, v in msg.items() if k not in ("cmd", "kind")}

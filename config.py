@@ -34,7 +34,8 @@ class FileConfig:
 
 @dataclass
 class DbConfig:
-    backend: str = "sqlite"  # sqlite | mysql
+    enabled: bool = False          # 是否持久化到数据库
+    backend: str = "sqlite"         # sqlite | mysql
     sqlite_path: str = str(DATA_DIR / "ais.db")
     mysql_host: str = os.environ.get("AIS_MYSQL_HOST", "127.0.0.1")
     mysql_port: int = int(os.environ.get("AIS_MYSQL_PORT", "3306"))

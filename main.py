@@ -80,8 +80,6 @@ def main() -> int:
 
     print(f"启动 Web 服务: http://{args.host}:{args.port}")
     print("打开浏览器访问即可。Ctrl-C 退出。")
-    print(f"  主页面:    http://{args.host}:{args.port}/")
-    print(f"  单条解析:  http://{args.host}:{args.port}/parse")
 
     uvicorn.run(
         "web.app:app",

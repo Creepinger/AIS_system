@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-07-14T03:48:00.000Z" agent="Claude" version="24.7.0" type="device">
+    <diagram name="AIS消息解析流程" id="ais-decode-flow">
+        <mxGraphModel dx="1200" dy="800" grid="10" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <!-- 开始节点 -->
+                <mxCell id="start" value="<b><i>开始</i></b>" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#1565C0;strokeColor=#0D47A1;strokeWidth=4;fontColor=#FFFFFF;fontStyle=1;fontSize=16;" vertex="1" parent="1">
+                    <mxGeometry x="350" y="20" width="100" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 系统初始化 -->
+                <mxCell id="init" value="<b>系统初始化</b><br/><font size='12'>(配置参数、初始化解码器)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="320" y="100" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 采集数据 -->
+                <mxCell id="collect" value="<b>采集AIS数据帧</b><br/><font size='12'>(从网口/文件/串口接收)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="320" y="200" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 判断采集 -->
+                <mxCell id="check_collect" value="<b>是否采集完<br/>1帧？</b>" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=3;fontColor=#E65100;fontStyle=1;fontSize=14;rounded=1;" vertex="1" parent="1">
+                    <mxGeometry x="330" y="300" width="140" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- BCC校验 -->
+                <mxCell id="bcc" value="<b>调用BCC校验程序</b><br/><font size='12'>(位异或校验)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="320" y="440" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 判断BCC -->
+                <mxCell id="check_bcc" value="<b>BCC校验<br/>是否通过？</b>" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=3;fontColor=#E65100;fontStyle=1;fontSize=14;rounded=1;" vertex="1" parent="1">
+                    <mxGeometry x="330" y="540" width="140" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- 错误处理 -->
+                <mxCell id="discard" value="<b>丢弃或报错</b><br/><font size='12'>(记录错误信息)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#D32F2F;strokeWidth=3;fontColor=#B71C1C;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="520" y="560" width="140" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ASCII转6bit -->
+                <mxCell id="ascii" value="<b>8位ASCII码转换为<br/>6位二进制码</b>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="140" y="540" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 识别消息ID -->
+                <mxCell id="identify" value="<b>识别消息ID</b><br/><font size='12'>(判断消息类型1-27)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="140" y="640" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 分配bit -->
+                <mxCell id="split" value="<b>分配bit</b><br/><font size='12'>(按字段定义切分位流)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="140" y="740" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 二进制转十进制 -->
+                <mxCell id="bin_dec" value="<b>二进制码转换为十进制</b>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="340" y="740" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 十进制转字符 -->
+                <mxCell id="dec_char" value="<b>十进制转字符</b><br/><font size='12'>(船名等文本字段)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="540" y="740" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 信息显示 -->
+                <mxCell id="display" value="<b>信息显示</b><br/><font size='12'>(输出解析结果)</font>" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=3;fontColor=#0D47A1;fontStyle=1;fontSize=14;arcSize=20;" vertex="1" parent="1">
+                    <mxGeometry x="340" y="860" width="160" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 结束节点 -->
+                <mxCell id="end" value="<b><i>结束</i></b>" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#1565C0;strokeColor=#0D47A1;strokeWidth=4;fontColor=#FFFFFF;fontStyle=1;fontSize=16;" vertex="1" parent="1">
+                    <mxGeometry x="350" y="960" width="100" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 连接线 ==================== -->
+
+                <!-- 开始 -> 初始化 -->
+                <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="start" target="init">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 初始化 -> 采集 -->
+                <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="init" target="collect">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 采集 -> 判断 -->
+                <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="collect" target="check_collect">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 否 -> 采集 -->
+                <mxCell id="e4" value="<b>否</b>" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#D32F2F;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;fontColor=#D32F2F;fontStyle=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="check_collect" target="collect">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="540" y="350"/>
+                            <mxPoint x="540" y="230"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 是 -> BCC -->
+                <mxCell id="e5" value="<b>是</b>" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;fontColor=#1565C0;fontStyle=1;" edge="1" parent="1" source="check_collect" target="bcc">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- BCC -> 判断BCC -->
+                <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="bcc" target="check_bcc">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 否 -> 丢弃 -->
+                <mxCell id="e7" value="<b>否</b>" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#D32F2F;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;fontColor=#D32F2F;fontStyle=1;" edge="1" parent="1" source="check_bcc" target="discard">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 丢弃 -> 采集 -->
+                <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#D32F2F;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;dashed=1;dashPattern=8 4;" edge="1" parent="1" source="discard" target="collect">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="590" y="590"/>
+                            <mxPoint x="590" y="230"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 是 -> ASCII -->
+                <mxCell id="e9" value="<b>是</b>" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;fontColor=#1565C0;fontStyle=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="check_bcc" target="ascii">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- ASCII -> 识别 -->
+                <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="ascii" target="identify">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 识别 -> 分配 -->
+                <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="identify" target="split">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 分配 -> 二进制转十进制 -->
+                <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="split" target="bin_dec">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="300" y="770"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 二进制 -> 十进制转字符 -->
+                <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="bin_dec" target="dec_char">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 十进制 -> 显示 -->
+                <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="dec_char" target="display">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="620" y="890"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 显示 -> 结束 -->
+                <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;" edge="1" parent="1" source="display" target="end">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 循环 -> 采集 -->
+                <mxCell id="e16" value="<b>循环采集<br/>下一帧</b>" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#1565C0;endArrow=classic;endFill=1;jumpStyle=arc;jumpSize=8;fontColor=#1565C0;fontStyle=1;dashed=1;dashPattern=8 4;" edge="1" parent="1" source="display" target="collect">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="260" y="890"/>
+                            <mxPoint x="260" y="230"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

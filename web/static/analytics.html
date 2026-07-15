@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIS 规律分析 · 船舶AIS信息解析系统</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260712" />
+    <link rel="stylesheet" href="/static/css/analytics.css?v=20260715" />
+</head>
+<body>
+    <header class="topbar">
+        <div class="title-group">
+            <span class="title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                     fill="none" stroke="currentColor" stroke-width="1.6"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 18l1.5-5h15L21 18" />
+                    <path d="M5 13V8l7-3 7 3v5" />
+                    <path d="M12 5V3" />
+                    <path d="M2 18h20l-2 3H4l-2-3z" />
+                </svg>
+            </span>
+            <div class="title">船舶AIS信息解析系统</div>
+        </div>
+        <div class="controls">
+            <a href="/" class="nav-link">实时地图</a>
+            <a href="/parse" class="nav-link">船舶信息解析</a>
+            <a href="/analytics" class="nav-link" style="color: var(--cyan-400);">AIS 规律分析</a>
+        </div>
+    </header>
+
+    <main class="analytics-page">
+        <div class="analytics-header">
+            <div class="analytics-title">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                     stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3v18h18" />
+                    <polyline points="7,14 11,10 14,12 19,7" />
+                    <circle cx="7" cy="14" r="1.2" fill="currentColor" />
+                    <circle cx="11" cy="10" r="1.2" fill="currentColor" />
+                    <circle cx="14" cy="12" r="1.2" fill="currentColor" />
+                    <circle cx="19" cy="7" r="1.2" fill="currentColor" />
+                </svg>
+                AIS 消息规律分析
+            </div>
+            <div class="analytics-actions">
+                <label style="font-size:12px;color:var(--ink-300);">时间桶粒度</label>
+                <select id="bucket-minutes">
+                    <option value="1">1 分钟</option>
+                    <option value="5" selected>5 分钟</option>
+                    <option value="15">15 分钟</option>
+                    <option value="60">60 分钟</option>
+                </select>
+                <button id="btn-refresh">刷新数据</button>
+            </div>
+        </div>
+
+        <!-- 概览卡片 -->
+        <div class="overview-row" id="overview-row">
+            <div class="overview-card cyan"><div class="label">消息总数</div>
+                <div class="value" id="ov-total">-</div>
+                <div class="sub" id="ov-total-sub">&nbsp;</div></div>
+            <div class="overview-card orange"><div class="label">独立船舶</div>
+                <div class="value" id="ov-ships">-</div>
+                <div class="sub">MMSI 去重</div></div>
+            <div class="overview-card cyan"><div class="label">最新活动</div>
+                <div class="value" id="ov-latest">-</div>
+                <div class="sub" id="ov-earliest">&nbsp;</div></div>
+            <div class="overview-card warning"><div class="label">今日消息</div>
+                <div class="value" id="ov-today">-</div>
+                <div class="sub" id="ov-today-sub">&nbsp;</div></div>
+        </div>
+
+        <!-- Tab 栏 -->
+        <div class="analytics-tabs">
+            <button class="analytics-tab active" data-tab="overview">总览 / 类型</button>
+            <button class="analytics-tab" data-tab="temporal">时间分布</button>
+            <button class="analytics-tab" data-tab="spatial">空间分布</button>
+            <button class="analytics-tab" data-tab="motion">航速 / 航向</button>
+            <button class="analytics-tab" data-tab="anomaly">异常检测</button>
+        </div>
+
+        <!-- Tab 1: 总览 / 类型 -->
+        <div class="tab-pane" data-tab="overview">
+            <div class="cards-grid">
+                <div class="analytics-card">
+                    <h3>消息类型分布 <span class="h3-sub">AIS 标准 1~27 号</span></h3>
+                    <div class="chart-box"><canvas id="chart-msg-type"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <h3>活跃船舶 Top 20 <span class="h3-sub">按消息数降序</span></h3>
+                    <div class="chart-box"><canvas id="chart-top-ships"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: 时间分布 -->
+        <div class="tab-pane" data-tab="temporal" hidden>
+            <div class="cards-grid">
+                <div class="analytics-card lg full">
+                    <h3>消息时间序列 <span class="h3-sub">按桶聚合</span></h3>
+                    <div class="chart-box"><canvas id="chart-temporal"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <h3>7×24 小时×星期 热力
+                        <span class="h3-sub" id="heat-sub"></span>
+                    </h3>
+                    <div class="chart-box"><canvas id="chart-heatmap"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: 空间分布 -->
+        <div class="tab-pane" data-tab="spatial" hidden>
+            <div class="cards-grid">
+                <div class="analytics-card">
+                    <h3>船舶聚集热点 Top 50
+                        <span class="h3-sub">精度 0.01° ≈ 1.1 km</span>
+                    </h3>
+                    <div class="chart-box"><canvas id="chart-spatial"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <h3>热点榜 <span class="h3-sub">坐标 / 消息数</span></h3>
+                    <div class="geo-list" id="geo-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: 航速 / 航向 -->
+        <div class="tab-pane" data-tab="motion" hidden>
+            <div class="cards-grid">
+                <div class="analytics-card">
+                    <h3>航速分布 <span class="h3-sub">每桶 5 节</span></h3>
+                    <div class="chart-box"><canvas id="chart-speed"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <h3>航向 16 方位 <span class="h3-sub">罗盘式玫瑰</span></h3>
+                    <div class="chart-box"><canvas id="chart-course"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: 异常 -->
+        <div class="tab-pane" data-tab="anomaly" hidden>
+            <div class="overview-row">
+                <div class="overview-card danger"><div class="label">无效坐标 (0,0)</div>
+                    <div class="value" id="an-1">-</div><div class="sub">疑似伪造 / 解析异常</div></div>
+                <div class="overview-card warning"><div class="label">部分解码</div>
+                    <div class="value" id="an-2">-</div><div class="sub">坐标缺失但 MMSI 存在</div></div>
+                <div class="overview-card warning"><div class="label">异常航速 &gt; 40 节</div>
+                    <div class="value" id="an-3">-</div><div class="sub">物理上不合理</div></div>
+                <div class="overview-card orange"><div class="label">位置跳变</div>
+                    <div class="value" id="an-4">-</div><div class="sub">30 分钟内跨越 ≥ 50 km</div></div>
+            </div>
+            <div class="cards-grid">
+                <div class="analytics-card full">
+                    <h3>坐标 (0,0) 异常</h3>
+                    <div id="tbl-1"></div>
+                </div>
+                <div class="analytics-card full">
+                    <h3>异常航速</h3>
+                    <div id="tbl-3"></div>
+                </div>
+                <div class="analytics-card full">
+                    <h3>位置跳变（可能伪造 / 数据污染）</h3>
+                    <div id="tbl-4"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/static/js/analytics.js?v=20260715"></script>
+</body>
+</html>
